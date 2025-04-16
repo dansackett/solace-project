@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState, ChangeEvent } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Advocate } from '@/db/definitions';
 import { AdvocateFilters } from '@/app/definitions';
