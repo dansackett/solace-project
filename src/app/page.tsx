@@ -1,91 +1,100 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-export default function Home() {
-  const [advocates, setAdvocates] = useState([]);
-  const [filteredAdvocates, setFilteredAdvocates] = useState([]);
+import { Advocate } from '@/db/definitions';
+import { AdvocateFilters } from '@/app/definitions';
+
+import AdvocateTable from '@/app/advocates/table';
+import AdvocateFiltersUI from '@/app/advocates/filters';
+
+/**
+ * getDefaultFilters allows a convenient way to set initial filters and reset
+ * to the same state. Most users are not going to be looking for a name or
+ * phone number through a filtering UI so I am only exposing filters that make
+ * sense to find a relevant advocate.
+ */
+const getDefaultFilters = () : AdvocateFilters => {
+  return { city: '', degree: '', specialty: '', experience: '', };
+};
+
+/**
+ * useAdvocates separates the advocate fetch logic so it can be tested easier
+ * and to keep the main page component easier to read quickly. 
+ */
+const useAdvocates = (filters: AdvocateFilters) => {
+  const [advocates, setAdvocates] = useState<Advocate[]>([]);
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
+  const [degreeOptions, setDegreeOptions] = useState<string[]>([]);
+  const [specialtyOptions, setSpecialtyOptions] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    console.log("fetching advocates...");
-    fetch("/api/advocates").then((response) => {
-      response.json().then((jsonResponse) => {
-        setAdvocates(jsonResponse.data);
-        setFilteredAdvocates(jsonResponse.data);
-      });
-    });
-  }, []);
+    setIsLoading(true);
 
-  const onChange = (e) => {
-    const searchTerm = e.target.value;
+    const baseURL = '/api/advocates';
+    const params = new URLSearchParams();
 
-    document.getElementById("search-term").innerHTML = searchTerm;
+    for (const filter in filters) {
+      const filterVal = filters[filter];
 
-    console.log("filtering advocates...");
-    const filteredAdvocates = advocates.filter((advocate) => {
-      return (
-        advocate.firstName.includes(searchTerm) ||
-        advocate.lastName.includes(searchTerm) ||
-        advocate.city.includes(searchTerm) ||
-        advocate.degree.includes(searchTerm) ||
-        advocate.specialties.includes(searchTerm) ||
-        advocate.yearsOfExperience.includes(searchTerm)
-      );
-    });
+      if (filterVal !== '') {
+        params.append(filter, filterVal);
+      }
+    }
 
-    setFilteredAdvocates(filteredAdvocates);
+    const urlWithParams = `${baseURL}?${params.toString()}`;
+
+    fetch(urlWithParams)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("server error");
+        }
+
+        return response.json();
+      })
+      .then((response) => {
+        setAdvocates(response.data);
+        setCityOptions(response.cityOptions);
+        setDegreeOptions(response.degreeOptions);
+        setSpecialtyOptions(response.specialtyOptions);
+      })
+      .catch((error) => setError(error))
+      .finally(() => setIsLoading(false));
+  }, [filters]);
+
+  return { advocates, cityOptions, degreeOptions, specialtyOptions, isLoading, error };
+};
+
+
+export default function Home() {
+  const [filters, setFilters] = useState<AdvocateFilters>(getDefaultFilters());
+  const { advocates, cityOptions, degreeOptions, specialtyOptions, isLoading, error } = useAdvocates(filters);
+
+  const handleFilterChange = (field: string, query: string) => {
+    setFilters({ ...filters, [field]: query });
   };
 
-  const onClick = () => {
-    console.log(advocates);
-    setFilteredAdvocates(advocates);
+  const handleFilterReset = () => {
+    setFilters(getDefaultFilters());
   };
 
   return (
-    <main style={{ margin: "24px" }}>
-      <h1>Solace Advocates</h1>
-      <br />
-      <br />
-      <div>
-        <p>Search</p>
-        <p>
-          Searching for: <span id="search-term"></span>
-        </p>
-        <input style={{ border: "1px solid black" }} onChange={onChange} />
-        <button onClick={onClick}>Reset Search</button>
-      </div>
-      <br />
-      <br />
-      <table>
-        <thead>
-          <th>First Name</th>
-          <th>Last Name</th>
-          <th>City</th>
-          <th>Degree</th>
-          <th>Specialties</th>
-          <th>Years of Experience</th>
-          <th>Phone Number</th>
-        </thead>
-        <tbody>
-          {filteredAdvocates.map((advocate) => {
-            return (
-              <tr>
-                <td>{advocate.firstName}</td>
-                <td>{advocate.lastName}</td>
-                <td>{advocate.city}</td>
-                <td>{advocate.degree}</td>
-                <td>
-                  {advocate.specialties.map((s) => (
-                    <div>{s}</div>
-                  ))}
-                </td>
-                <td>{advocate.yearsOfExperience}</td>
-                <td>{advocate.phoneNumber}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </main>
+    <div className="body">
+      <AdvocateFiltersUI
+        filters={filters}
+        cityOptions={cityOptions}
+        degreeOptions={degreeOptions}
+        specialtyOptions={specialtyOptions}
+        onFilterchange={handleFilterChange}
+        onResetFilters={handleFilterReset}
+      />
+
+      <AdvocateTable
+        advocates={advocates}
+        isLoading={isLoading}
+      />
+    </div>
   );
 }
